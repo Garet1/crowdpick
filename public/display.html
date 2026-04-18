@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Media a la Carta — Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    #waiting { text-align: center; }
+    #waiting h1 { font-size: 3rem; color: #1DB954; }
+    #waiting p { font-size: 1.2rem; color: #555; margin-top: 16px; }
+    #poll-section { display: none; width: 100%; max-width: 1000px; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+    .poll-title { font-size: 2.2rem; font-weight: 700; color: #fff; }
+    .qr-box { text-align: center; }
+    .qr-box img { border-radius: 12px; width: 140px; height: 140px; }
+    .qr-label { font-size: 0.85rem; color: #aaa; margin-top: 8px; }
+    .qr-url { font-size: 1rem; color: #1DB954; font-weight: 600; }
+    .options { display: flex; flex-direction: column; gap: 20px; }
+    .option-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: opacity 0.5s;
+    }
+    .option-row.loser { opacity: 0.3; }
+    .option-row.winner .option-name { color: #1DB954; }
+    .option-row.winner .bar-fill { background: #1DB954; }
+    .option-info { width: 260px; flex-shrink: 0; }
+    .option-type { font-size: 0.75rem; color: #1DB954; text-transform: uppercase; letter-spacing: 1px; }
+    .option-name { font-size: 1.3rem; font-weight: 700; transition: color 0.5s; }
+    .option-desc { font-size: 0.85rem; color: #aaa; }
+    .bar-container { flex: 1; background: #222; border-radius: 8px; height: 48px; overflow: hidden; }
+    .bar-fill {
+      height: 100%;
+      background: #1DB954;
+      border-radius: 8px;
+      transition: width 0.5s ease, background 0.5s;
+      min-width: 4px;
+    }
+    .option-row.loser .bar-fill { background: #444; }
+    .vote-count { width: 80px; text-align: right; font-size: 1.4rem; font-weight: 700; color: #1DB954; }
+    .percent { width: 60px; text-align: right; font-size: 1rem; color: #aaa; }
+    .winner-badge {
+      font-size: 1.5rem;
+      width: 40px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+    .option-row.winner .winner-badge { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="waiting">
+    <h1>🎵 Media a la Carta</h1>
+    <p>La votación comenzará en breve...</p>
+  </div>
+
+  <div id="poll-section">
+    <div class="header">
+      <div class="poll-title" id="poll-title"></div>
+      <div class="qr-box">
+        <img id="qr-img" src="" alt="QR">
+        <div class="qr-label">Escaneá para votar</div>
+        <div class="qr-url" id="qr-url"></div>
+      </div>
+    </div>
+    <div class="options" id="options-container"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let currentOptions = [];
+    let LOCAL_IP = null;
+    let pendingPoll = null;
+
+    // Primero obtenemos la IP, después arrancamos todo
+    fetch('/api/ip')
+      .then(r => r.json())
+      .then(data => {
+        LOCAL_IP = data.ip;
+        // Si ya llegó un poll-update antes de tener la IP, lo procesamos ahora
+        if (pendingPoll) {
+          const { poll, votes } = pendingPoll;
+          pendingPoll = null;
+          showPoll(poll, votes);
+        }
+      });
+
+    function generateQR(url) {
+      const encoded = encodeURIComponent(url);
+      document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encoded}`;
+      document.getElementById('qr-url').textContent = url;
+    }
+
+    function showPoll(poll, votes) {
+      currentOptions = poll.options;
+      document.getElementById('waiting').style.display = 'none';
+      document.getElementById('poll-section').style.display = 'block';
+      document.getElementById('poll-title').textContent = poll.title;
+      generateQR(`http://${LOCAL_IP}:3000`);
+      renderOptions(poll.options, votes);
+    }
+
+    socket.on('poll-update', ({ poll, votes }) => {
+      if (!LOCAL_IP) {
+        // IP aún no llegó, guardamos para después
+        pendingPoll = { poll, votes };
+        return;
+      }
+      showPoll(poll, votes);
+    });
+
+    socket.on('votes-update', (votes) => {
+      updateBars(votes);
+    });
+
+    socket.on('show-winner', ({ winnerId }) => {
+      currentOptions.forEach(opt => {
+        const row = document.getElementById(`row-${opt.id}`);
+        if (!row) return;
+        row.classList.remove('winner', 'loser');
+        if (opt.id === winnerId) {
+          row.classList.add('winner');
+        } else {
+          row.classList.add('loser');
+        }
+      });
+    });
+
+    socket.on('go-home', () => {
+      currentOptions = [];
+      document.getElementById('poll-section').style.display = 'none';
+      document.getElementById('waiting').style.display = 'block';
+    });
+
+    function renderOptions(options, votes) {
+      const container = document.getElementById('options-container');
+      container.innerHTML = '';
+      options.forEach(opt => {
+        const row = document.createElement('div');
+        row.className = 'option-row';
+        row.id = `row-${opt.id}`;
+        row.innerHTML = `
+          <div class="option-info">
+            <div class="option-type">${opt.type || ''}</div>
+            <div class="option-name">${opt.name}</div>
+            <div class="option-desc">${opt.description || ''}</div>
+          </div>
+          <div class="bar-container">
+            <div class="bar-fill" id="bar-${opt.id}" style="width:0%"></div>
+          </div>
+          <div class="vote-count" id="count-${opt.id}">0</div>
+          <div class="percent" id="pct-${opt.id}">0%</div>
+          <div class="winner-badge" id="badge-${opt.id}">🏆</div>
+        `;
+        container.appendChild(row);
+      });
+      updateBars(votes);
+    }
+
+    function updateBars(votes) {
+      const total = Object.values(votes).reduce((a, b) => a + b, 0);
+      currentOptions.forEach(opt => {
+        const v = votes[opt.id] || 0;
+        const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+        const bar = document.getElementById(`bar-${opt.id}`);
+        const count = document.getElementById(`count-${opt.id}`);
+        const pctEl = document.getElementById(`pct-${opt.id}`);
+        if (bar) bar.style.width = pct + '%';
+        if (count) count.textContent = v;
+        if (pctEl) pctEl.textContent = pct + '%';
+      });
+    }
+  </script>
+</body>
+</html>

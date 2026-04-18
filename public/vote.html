@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Media a la Carta — Votá</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 8px; text-align: center; color: #1DB954; }
+    p.subtitle { font-size: 0.9rem; color: #aaa; margin-bottom: 30px; text-align: center; }
+    .options { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; }
+    .option-btn {
+      background: #222;
+      border: 2px solid #333;
+      color: #fff;
+      padding: 18px 20px;
+      border-radius: 12px;
+      font-size: 1rem;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .option-btn:hover { border-color: #1DB954; background: #1a1a1a; }
+    .option-label { font-size: 0.75rem; color: #1DB954; margin-bottom: 4px; }
+    .option-title { font-weight: 600; }
+    .option-sub { font-size: 0.8rem; color: #aaa; margin-top: 2px; }
+    #thanks { display: none; text-align: center; }
+    #thanks h2 { font-size: 1.6rem; color: #1DB954; margin-bottom: 10px; }
+    #thanks p { color: #aaa; margin-top: 8px; }
+    #winner-announcement {
+      display: none;
+      margin-top: 30px;
+      background: #1a3a25;
+      border: 2px solid #1DB954;
+      border-radius: 16px;
+      padding: 24px 20px;
+      text-align: center;
+      width: 100%;
+      max-width: 400px;
+    }
+    #winner-announcement .label { font-size: 0.85rem; color: #aaa; margin-bottom: 8px; }
+    #winner-announcement .name { font-size: 2rem; font-weight: 700; color: #1DB954; }
+    #winner-announcement .trophy { font-size: 2.5rem; margin-bottom: 10px; }
+    #waiting { text-align: center; }
+    #waiting h2 { font-size: 1.4rem; color: #aaa; }
+    #waiting p { color: #555; margin-top: 10px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div id="waiting">
+    <h2>🎵 Media a la Carta</h2>
+    <p>Esperando la próxima votación...</p>
+  </div>
+
+  <div id="poll-section" style="display:none; width:100%; max-width:400px;">
+    <h1 id="poll-title"></h1>
+    <p class="subtitle">Elegí qué suena en la próxima media hora</p>
+    <div class="options" id="options-container"></div>
+  </div>
+
+  <div id="thanks">
+    <h2>✅ ¡Voto registrado!</h2>
+    <p>Mirá la pantalla grande para ver los resultados en vivo</p>
+  </div>
+
+  <div id="winner-announcement">
+    <div class="trophy">🏆</div>
+    <div class="label">¡El ganador es...</div>
+    <div class="name" id="winner-name"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let pollId = null;
+    let voted = false;
+    let currentPoll = null;
+
+    socket.on('poll-update', ({ poll, votes }) => {
+      currentPoll = poll;
+      pollId = poll.id || poll.title;
+      const key = 'voted_' + pollId;
+      document.getElementById('winner-announcement').style.display = 'none';
+
+      if (localStorage.getItem(key)) {
+        voted = true;
+        document.getElementById('waiting').style.display = 'none';
+        document.getElementById('poll-section').style.display = 'none';
+        document.getElementById('thanks').style.display = 'block';
+        return;
+      }
+
+      voted = false;
+      document.getElementById('waiting').style.display = 'none';
+      document.getElementById('thanks').style.display = 'none';
+      document.getElementById('poll-section').style.display = 'block';
+      document.getElementById('poll-title').textContent = poll.title;
+
+      const container = document.getElementById('options-container');
+      container.innerHTML = '';
+      poll.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerHTML = `
+          <div class="option-label">${opt.type || ''}</div>
+          <div class="option-title">${opt.name}</div>
+          <div class="option-sub">${opt.description || ''}</div>
+        `;
+        btn.onclick = () => castVote(opt.id);
+        container.appendChild(btn);
+      });
+    });
+
+    socket.on('show-winner', ({ winnerId, poll }) => {
+      if (!poll) return;
+      const winner = poll.options.find(o => o.id === winnerId);
+      if (!winner) return;
+      document.getElementById('winner-name').textContent = winner.name;
+      document.getElementById('poll-section').style.display = 'none';
+      document.getElementById('thanks').style.display = 'none';
+      document.getElementById('waiting').style.display = 'none';
+      document.getElementById('winner-announcement').style.display = 'block';
+    });
+
+    socket.on('go-home', () => {
+      voted = false;
+      if (pollId) localStorage.removeItem('voted_' + pollId);
+      document.getElementById('poll-section').style.display = 'none';
+      document.getElementById('thanks').style.display = 'none';
+      document.getElementById('winner-announcement').style.display = 'none';
+      document.getElementById('waiting').style.display = 'block';
+    });
+
+    function castVote(optionId) {
+      if (voted) return;
+      voted = true;
+      const key = 'voted_' + pollId;
+      localStorage.setItem(key, '1');
+      socket.emit('vote', optionId);
+      document.getElementById('poll-section').style.display = 'none';
+      document.getElementById('thanks').style.display = 'block';
+    }
+  </script>
+</body>
+</html>
