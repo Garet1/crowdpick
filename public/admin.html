@@ -40,7 +40,6 @@
       border-radius: 10px;
       padding: 16px;
       margin-top: 12px;
-      position: relative;
     }
     .option-block-header {
       display: flex;
@@ -73,6 +72,19 @@
     .btn-red:hover { background: #a93226; }
     .btn-gray { background: #333; color: #fff; }
     .btn-gray:hover { background: #444; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #444;
+      color: #aaa;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .btn-outline:hover { border-color: var(--accent, #6C63FF); color: var(--accent, #6C63FF); }
     .status {
       margin-top: 16px;
       padding: 14px;
@@ -106,7 +118,7 @@
   </style>
 </head>
 <body>
-  <h1 id="page-title">🎛️ Panel Admin</h1>
+  <h1>🎛️ Panel Admin</h1>
   <p class="sub" id="page-sub">Cargando...</p>
 
   <p class="section-title">Pantalla de espera</p>
@@ -114,6 +126,7 @@
   <input type="text" id="waiting-title" placeholder="Ej: 🎵 Bienvenidos">
   <label>Subtítulo</label>
   <input type="text" id="waiting-subtitle" placeholder="Ej: La votación comenzará en breve...">
+  <button class="btn-outline" onclick="updateWaiting()">↺ Actualizar pantalla de espera</button>
 
   <p class="section-title">Votación</p>
   <label>Título de la votación</label>
@@ -164,11 +177,13 @@
   </div>
 
   <div class="status" id="status"></div>
-
   <div class="powered">Powered by <span>Crowdpick</span></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    // Socket primero, todo lo demás después
+    const socket = io();
+
     let PRIMARY_COLOR = '#6C63FF';
     let VENUE_NAME = 'Crowdpick';
     let optionCount = 3;
@@ -192,9 +207,15 @@
       }
     }
 
+    function updateWaiting() {
+      const title = document.getElementById('waiting-title').value;
+      const subtitle = document.getElementById('waiting-subtitle').value;
+      socket.emit('update-waiting', { title, subtitle });
+      showStatus('✅ Pantalla de espera actualizada.', true);
+    }
+
     function removeOption(btn) {
-      const block = btn.closest('.option-block');
-      block.remove();
+      btn.closest('.option-block').remove();
       renumberOptions();
     }
 
@@ -203,19 +224,16 @@
       blocks.forEach((block, i) => {
         const h3 = block.querySelector('h3');
         if (h3) h3.textContent = 'Opción ' + (i + 1);
-        // Mostrar botón eliminar solo si hay más de 2 opciones
         const removeBtn = block.querySelector('.btn-remove');
-        if (blocks.length > 2) {
-          if (!removeBtn && i > 1) {
-            const header = block.querySelector('.option-block-header');
-            const btn = document.createElement('button');
-            btn.className = 'btn-remove';
-            btn.textContent = '✕ Eliminar';
-            btn.onclick = () => removeOption(btn);
-            header.appendChild(btn);
-          }
-        } else {
+        if (blocks.length <= 2) {
           if (removeBtn) removeBtn.remove();
+        } else if (i >= 2 && !removeBtn) {
+          const header = block.querySelector('.option-block-header');
+          const btn = document.createElement('button');
+          btn.className = 'btn-remove';
+          btn.textContent = '✕ Eliminar';
+          btn.onclick = () => removeOption(btn);
+          header.appendChild(btn);
         }
       });
       optionCount = blocks.length;
@@ -249,8 +267,6 @@
       const title = document.getElementById('poll-title').value.trim();
       const names = document.querySelectorAll('.opt-name');
       const descs = document.querySelectorAll('.opt-desc');
-      const waitingTitle = document.getElementById('waiting-title').value.trim();
-      const waitingSubtitle = document.getElementById('waiting-subtitle').value.trim();
 
       const options = [];
       names.forEach((n, i) => {
@@ -266,11 +282,6 @@
       if (!title || options.length < 2) {
         showStatus('⚠️ Completá el título y al menos 2 opciones.', false);
         return;
-      }
-
-      // Actualizar pantalla de espera antes de lanzar
-      if (waitingTitle || waitingSubtitle) {
-        socket.emit('update-waiting', { title: waitingTitle, subtitle: waitingSubtitle });
       }
 
       socket.emit('start-poll', { title, options });
@@ -297,22 +308,6 @@
       el.style.background = ok ? '#1a1a3a' : '#3a1a1a';
       el.style.borderLeftColor = ok ? PRIMARY_COLOR : '#c0392b';
     }
-
-    // Actualizar pantalla de espera en tiempo real mientras escribe
-    document.getElementById('waiting-title').addEventListener('input', () => {
-      socket.emit('update-waiting', {
-        title: document.getElementById('waiting-title').value,
-        subtitle: document.getElementById('waiting-subtitle').value
-      });
-    });
-    document.getElementById('waiting-subtitle').addEventListener('input', () => {
-      socket.emit('update-waiting', {
-        title: document.getElementById('waiting-title').value,
-        subtitle: document.getElementById('waiting-subtitle').value
-      });
-    });
-
-    const socket = io();
   </script>
 </body>
 </html>
