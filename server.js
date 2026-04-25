@@ -52,9 +52,15 @@ app.get('/api/config', (req, res) => {
 let currentPoll = null;
 let votes = {};
 let winnerVisible = false;
+let waitingScreen = { title: '', subtitle: '' };
 
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
+
+  // Al conectar, enviamos el estado actual para sincronizar
+  if (waitingScreen.title || waitingScreen.subtitle) {
+    socket.emit('update-waiting', waitingScreen);
+  }
   if (currentPoll) {
     socket.emit('poll-update', { poll: currentPoll, votes });
     if (winnerVisible) {
@@ -62,6 +68,12 @@ io.on('connection', (socket) => {
       socket.emit('show-winner', { winnerId, poll: currentPoll, votes });
     }
   }
+
+  socket.on('update-waiting', (data) => {
+    waitingScreen = data;
+    // Reenviar a todos los clientes excepto el admin que lo mandó
+    socket.broadcast.emit('update-waiting', data);
+  });
 
   socket.on('start-poll', (poll) => {
     currentPoll = poll;
@@ -88,6 +100,7 @@ io.on('connection', (socket) => {
     currentPoll = null;
     votes = {};
     winnerVisible = false;
+    waitingScreen = { title: '', subtitle: '' };
     io.emit('go-home');
   });
 

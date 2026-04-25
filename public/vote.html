@@ -31,9 +31,8 @@
       text-align: left;
       transition: all 0.2s;
     }
-    .option-label { font-size: 0.75rem; margin-bottom: 4px; }
     .option-title { font-weight: 600; }
-    .option-sub { font-size: 0.8rem; color: #aaa; margin-top: 2px; }
+    .option-sub { font-size: 0.8rem; color: #aaa; margin-top: 4px; }
     #thanks { display: none; text-align: center; }
     #thanks h2 { font-size: 1.6rem; margin-bottom: 10px; }
     #thanks p { color: #aaa; margin-top: 8px; }
@@ -53,17 +52,24 @@
     #waiting { text-align: center; }
     #waiting h2 { font-size: 1.4rem; color: #aaa; }
     #waiting p { color: #555; margin-top: 10px; font-size: 0.85rem; }
+    .powered {
+      position: fixed;
+      bottom: 14px;
+      right: 20px;
+      font-size: 0.7rem;
+      color: #2a2a2a;
+    }
   </style>
 </head>
 <body>
   <div id="waiting">
     <h2 id="waiting-title">🎵 Crowdpick</h2>
-    <p>Esperando la próxima votación...</p>
+    <p id="waiting-subtitle">Esperando la próxima votación...</p>
   </div>
 
   <div id="poll-section" style="display:none; width:100%; max-width:400px;">
     <h1 id="poll-title"></h1>
-    <p class="subtitle">Elegí qué suena en la próxima media hora</p>
+    <p class="subtitle">Elegí una opción</p>
     <div class="options" id="options-container"></div>
   </div>
 
@@ -78,6 +84,8 @@
     <div class="name" id="winner-name"></div>
   </div>
 
+  <div class="powered">Powered by Crowdpick</div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -85,13 +93,11 @@
     let voted = false;
     let currentPoll = null;
     let PRIMARY_COLOR = '#6C63FF';
-    let VENUE_NAME = 'Crowdpick';
 
     fetch('/api/config')
       .then(r => r.json())
       .then(cfg => {
         PRIMARY_COLOR = cfg.primaryColor;
-        VENUE_NAME = cfg.venueName;
         applyTheme();
       });
 
@@ -102,6 +108,19 @@
       document.getElementById('winner-announcement').style.background = PRIMARY_COLOR + '22';
       document.getElementById('winner-announcement').querySelector('.name').style.color = PRIMARY_COLOR;
     }
+
+    function showWaiting() {
+      document.getElementById('poll-section').style.display = 'none';
+      document.getElementById('thanks').style.display = 'none';
+      document.getElementById('winner-announcement').style.display = 'none';
+      document.getElementById('waiting').style.display = 'block';
+    }
+
+    // Actualizar pantalla de espera desde admin en tiempo real
+    socket.on('update-waiting', ({ title, subtitle }) => {
+      if (title !== undefined) document.getElementById('waiting-title').textContent = title || '🎵 Crowdpick';
+      if (subtitle !== undefined) document.getElementById('waiting-subtitle').textContent = subtitle || 'Esperando la próxima votación...';
+    });
 
     socket.on('poll-update', ({ poll, votes }) => {
       currentPoll = poll;
@@ -130,11 +149,9 @@
         const btn = document.createElement('button');
         btn.className = 'option-btn';
         btn.innerHTML = `
-          <div class="option-label" style="color:${PRIMARY_COLOR}">${opt.type || ''}</div>
           <div class="option-title">${opt.name}</div>
-          <div class="option-sub">${opt.description || ''}</div>
+          ${opt.description ? `<div class="option-sub">${opt.description}</div>` : ''}
         `;
-        btn.style.setProperty('--accent', PRIMARY_COLOR);
         btn.onmouseover = () => { btn.style.borderColor = PRIMARY_COLOR; btn.style.background = '#1a1a1a'; };
         btn.onmouseout = () => { btn.style.borderColor = '#333'; btn.style.background = '#222'; };
         btn.onclick = () => castVote(opt.id);
@@ -153,13 +170,13 @@
       document.getElementById('winner-announcement').style.display = 'block';
     });
 
+    // Reinicio forzado: limpia localStorage y vuelve a waiting sin importar el estado anterior
     socket.on('go-home', () => {
       voted = false;
       if (pollId) localStorage.removeItem('voted_' + pollId);
-      document.getElementById('poll-section').style.display = 'none';
-      document.getElementById('thanks').style.display = 'none';
-      document.getElementById('winner-announcement').style.display = 'none';
-      document.getElementById('waiting').style.display = 'block';
+      pollId = null;
+      currentPoll = null;
+      showWaiting();
     });
 
     function castVote(optionId) {
