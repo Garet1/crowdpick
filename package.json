@@ -1,9 +1,10 @@
 {
-  "name": "media-a-la-carta",
+  "name": "crowdpick",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Live audience voting system for events",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
