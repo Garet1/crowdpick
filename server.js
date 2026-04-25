@@ -12,6 +12,7 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const VENUE_NAME = process.env.VENUE_NAME || 'Crowdpick';
 const PRIMARY_COLOR = process.env.PRIMARY_COLOR || '#6C63FF';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'crowdpick2024';
 
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
@@ -34,10 +35,93 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'vote.html'));
 });
+
 app.get('/display', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'display.html'));
 });
+
+// Protección del admin
 app.get('/admin', (req, res) => {
+  const pwd = req.query.pwd;
+  if (pwd !== ADMIN_PASSWORD) {
+    res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crowdpick — Acceso</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .box {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 40px 32px;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 8px; }
+    p { color: #555; font-size: 0.85rem; margin-bottom: 28px; }
+    input {
+      width: 100%;
+      background: #222;
+      border: 1px solid #333;
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    input:focus { outline: none; border-color: ${PRIMARY_COLOR}; }
+    button {
+      width: 100%;
+      background: ${PRIMARY_COLOR};
+      color: #000;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.9; }
+    .error { color: #c0392b; font-size: 0.85rem; margin-top: 12px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🎛️ Panel Admin</h1>
+    <p>${VENUE_NAME}</p>
+    <input type="password" id="pwd" placeholder="Contraseña" onkeydown="if(event.key==='Enter') login()">
+    <button onclick="login()">Ingresar</button>
+    <div class="error" id="err">Contraseña incorrecta</div>
+  </div>
+  <script>
+    function login() {
+      const pwd = document.getElementById('pwd').value;
+      if (pwd) {
+        window.location.href = '/admin?pwd=' + encodeURIComponent(pwd);
+      }
+    }
+    ${req.query.pwd ? "document.getElementById('err').style.display='block';" : ''}
+  </script>
+</body>
+</html>`);
+    return;
+  }
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -57,7 +141,6 @@ let waitingScreen = { title: '', subtitle: '' };
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
 
-  // Al conectar, enviamos el estado actual para sincronizar
   if (waitingScreen.title || waitingScreen.subtitle) {
     socket.emit('update-waiting', waitingScreen);
   }
@@ -71,7 +154,6 @@ io.on('connection', (socket) => {
 
   socket.on('update-waiting', (data) => {
     waitingScreen = data;
-    // Reenviar a todos los clientes excepto el admin que lo mandó
     socket.broadcast.emit('update-waiting', data);
   });
 
