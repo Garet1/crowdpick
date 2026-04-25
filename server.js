@@ -40,7 +40,6 @@ app.get('/display', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'display.html'));
 });
 
-// Protección del admin
 app.get('/admin', (req, res) => {
   const pwd = req.query.pwd;
   if (pwd !== ADMIN_PASSWORD) {
@@ -53,49 +52,29 @@ app.get('/admin', (req, res) => {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #111;
-      color: #fff;
+      background: #111; color: #fff;
       font-family: 'Segoe UI', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+      min-height: 100vh; display: flex;
+      align-items: center; justify-content: center; padding: 20px;
     }
     .box {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 16px;
-      padding: 40px 32px;
-      width: 100%;
-      max-width: 360px;
-      text-align: center;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 16px; padding: 40px 32px;
+      width: 100%; max-width: 360px; text-align: center;
     }
     h1 { font-size: 1.4rem; margin-bottom: 8px; }
     p { color: #555; font-size: 0.85rem; margin-bottom: 28px; }
     input {
-      width: 100%;
-      background: #222;
-      border: 1px solid #333;
-      color: #fff;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 1rem;
-      margin-bottom: 12px;
-      text-align: center;
-      letter-spacing: 2px;
+      width: 100%; background: #222; border: 1px solid #333;
+      color: #fff; padding: 12px 16px; border-radius: 8px;
+      font-size: 1rem; margin-bottom: 12px;
+      text-align: center; letter-spacing: 2px;
     }
     input:focus { outline: none; border-color: ${PRIMARY_COLOR}; }
     button {
-      width: 100%;
-      background: ${PRIMARY_COLOR};
-      color: #000;
-      border: none;
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
+      width: 100%; background: ${PRIMARY_COLOR}; color: #000;
+      border: none; padding: 12px; border-radius: 8px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
     }
     button:hover { opacity: 0.9; }
     .error { color: #c0392b; font-size: 0.85rem; margin-top: 12px; display: none; }
@@ -112,9 +91,7 @@ app.get('/admin', (req, res) => {
   <script>
     function login() {
       const pwd = document.getElementById('pwd').value;
-      if (pwd) {
-        window.location.href = '/admin?pwd=' + encodeURIComponent(pwd);
-      }
+      if (pwd) window.location.href = '/admin?pwd=' + encodeURIComponent(pwd);
     }
     ${req.query.pwd ? "document.getElementById('err').style.display='block';" : ''}
   </script>
@@ -133,14 +110,29 @@ app.get('/api/config', (req, res) => {
   res.json({ venueName: VENUE_NAME, primaryColor: PRIMARY_COLOR });
 });
 
+// Estado del servidor
 let currentPoll = null;
 let votes = {};
 let winnerVisible = false;
 let waitingScreen = { title: '', subtitle: '' };
+let appearance = {
+  bgColor: '#111111',
+  textColor: '#ffffff',
+  accentColor: PRIMARY_COLOR,
+  subtitleColor: '#aaaaaa',
+  font: 'Inter',
+  logoUrl: ''
+};
+
+app.get('/api/appearance', (req, res) => {
+  res.json(appearance);
+});
 
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
 
+  // Sincronizar estado completo al conectar
+  socket.emit('appearance-update', appearance);
   if (waitingScreen.title || waitingScreen.subtitle) {
     socket.emit('update-waiting', waitingScreen);
   }
@@ -155,6 +147,23 @@ io.on('connection', (socket) => {
   socket.on('update-waiting', (data) => {
     waitingScreen = data;
     socket.broadcast.emit('update-waiting', data);
+  });
+
+  socket.on('update-appearance', (data) => {
+    appearance = { ...appearance, ...data };
+    socket.broadcast.emit('appearance-update', appearance);
+  });
+
+  socket.on('reset-appearance', () => {
+    appearance = {
+      bgColor: '#111111',
+      textColor: '#ffffff',
+      accentColor: PRIMARY_COLOR,
+      subtitleColor: '#aaaaaa',
+      font: 'Inter',
+      logoUrl: ''
+    };
+    io.emit('appearance-update', appearance);
   });
 
   socket.on('start-poll', (poll) => {

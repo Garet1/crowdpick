@@ -9,16 +9,19 @@
     body {
       background: #111;
       color: #fff;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: 'Inter', sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      transition: background 0.4s, color 0.4s;
     }
+    .logo-container { margin-bottom: 20px; display: none; }
+    .logo-container img { max-height: 70px; max-width: 200px; object-fit: contain; }
     h1 { font-size: 1.4rem; margin-bottom: 8px; text-align: center; }
-    p.subtitle { font-size: 0.9rem; color: #aaa; margin-bottom: 30px; text-align: center; }
+    p.subtitle { font-size: 0.9rem; margin-bottom: 30px; text-align: center; transition: color 0.4s; }
     .options { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; }
     .option-btn {
       background: #222;
@@ -32,10 +35,10 @@
       transition: all 0.2s;
     }
     .option-title { font-weight: 600; }
-    .option-sub { font-size: 0.8rem; color: #aaa; margin-top: 4px; }
+    .option-sub { font-size: 0.8rem; margin-top: 4px; transition: color 0.4s; }
     #thanks { display: none; text-align: center; }
     #thanks h2 { font-size: 1.6rem; margin-bottom: 10px; }
-    #thanks p { color: #aaa; margin-top: 8px; }
+    #thanks p { margin-top: 8px; transition: color 0.4s; }
     #winner-announcement {
       display: none;
       margin-top: 30px;
@@ -46,41 +49,38 @@
       max-width: 400px;
       border: 2px solid;
     }
-    #winner-announcement .label { font-size: 0.85rem; color: #aaa; margin-bottom: 8px; }
+    #winner-announcement .label { font-size: 0.85rem; margin-bottom: 8px; transition: color 0.4s; }
     #winner-announcement .name { font-size: 2rem; font-weight: 700; }
     #winner-announcement .trophy { font-size: 2.5rem; margin-bottom: 10px; }
     #waiting { text-align: center; }
-    #waiting h2 { font-size: 1.4rem; color: #aaa; }
-    #waiting p { color: #555; margin-top: 10px; font-size: 0.85rem; }
-    .powered {
-      position: fixed;
-      bottom: 14px;
-      right: 20px;
-      font-size: 0.7rem;
-      color: #2a2a2a;
-    }
+    #waiting h2 { font-size: 1.4rem; }
+    #waiting p { margin-top: 10px; font-size: 0.85rem; transition: color 0.4s; }
+    .powered { position: fixed; bottom: 14px; right: 20px; font-size: 0.7rem; color: #2a2a2a; }
   </style>
 </head>
 <body>
   <div id="waiting">
+    <div class="logo-container" id="waiting-logo"><img id="waiting-logo-img" src="" alt="Logo"></div>
     <h2 id="waiting-title">🎵 Crowdpick</h2>
     <p id="waiting-subtitle">Esperando la próxima votación...</p>
   </div>
 
-  <div id="poll-section" style="display:none; width:100%; max-width:400px;">
+  <div id="poll-section" style="display:none; width:100%; max-width:400px; display:none; flex-direction:column; align-items:center;">
+    <div class="logo-container" id="poll-logo"><img id="poll-logo-img" src="" alt="Logo"></div>
     <h1 id="poll-title"></h1>
-    <p class="subtitle">Elegí una opción</p>
+    <p class="subtitle" id="poll-subtitle">Elegí una opción</p>
     <div class="options" id="options-container"></div>
   </div>
 
   <div id="thanks">
+    <div class="logo-container" id="thanks-logo"><img id="thanks-logo-img" src="" alt="Logo"></div>
     <h2 id="thanks-title">✅ ¡Voto registrado!</h2>
-    <p>Mirá la pantalla grande para ver los resultados en vivo</p>
+    <p id="thanks-sub">Mirá la pantalla grande para ver los resultados en vivo</p>
   </div>
 
   <div id="winner-announcement">
     <div class="trophy">🏆</div>
-    <div class="label">¡El ganador es...</div>
+    <div class="label" id="winner-label">¡El ganador es...</div>
     <div class="name" id="winner-name"></div>
   </div>
 
@@ -92,22 +92,69 @@
     let pollId = null;
     let voted = false;
     let currentPoll = null;
-    let PRIMARY_COLOR = '#6C63FF';
+    let appearance = {
+      bgColor: '#111111', textColor: '#ffffff',
+      accentColor: '#6C63FF', subtitleColor: '#aaaaaa',
+      font: 'Inter', logoUrl: ''
+    };
 
-    fetch('/api/config')
-      .then(r => r.json())
-      .then(cfg => {
-        PRIMARY_COLOR = cfg.primaryColor;
-        applyTheme();
+    // Cargar Google Fonts
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:wght@400;700&family=Oswald:wght@400;600;700&family=Poppins:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Bebas+Neue&display=swap';
+    document.head.appendChild(fontLink);
+
+    fetch('/api/config').then(r => r.json()).then(cfg => {
+      appearance.accentColor = cfg.primaryColor;
+      applyAppearance();
+    });
+
+    socket.on('appearance-update', (data) => {
+      appearance = { ...appearance, ...data };
+      applyAppearance();
+    });
+
+    function applyAppearance() {
+      document.body.style.background = appearance.bgColor;
+      document.body.style.color = appearance.textColor;
+      document.body.style.fontFamily = `'${appearance.font}', sans-serif`;
+
+      document.getElementById('waiting-title').style.color = appearance.accentColor;
+      document.getElementById('waiting-subtitle').style.color = appearance.subtitleColor;
+      document.getElementById('waiting-subtitle').style.color = appearance.subtitleColor;
+      document.getElementById('thanks-title').style.color = appearance.accentColor;
+      document.getElementById('thanks-sub').style.color = appearance.subtitleColor;
+      document.getElementById('winner-label').style.color = appearance.subtitleColor;
+      document.getElementById('winner-name').style.color = appearance.accentColor;
+      document.getElementById('winner-announcement').style.borderColor = appearance.accentColor;
+      document.getElementById('winner-announcement').style.background = appearance.accentColor + '22';
+
+      // Logo en todas las secciones
+      const logos = ['waiting-logo', 'poll-logo', 'thanks-logo'];
+      const logoImgs = ['waiting-logo-img', 'poll-logo-img', 'thanks-logo-img'];
+      logos.forEach((id, i) => {
+        const container = document.getElementById(id);
+        const img = document.getElementById(logoImgs[i]);
+        if (appearance.logoUrl) {
+          img.src = appearance.logoUrl;
+          container.style.display = 'block';
+        } else {
+          container.style.display = 'none';
+        }
       });
 
-    function applyTheme() {
-      document.getElementById('waiting-title').style.color = PRIMARY_COLOR;
-      document.getElementById('thanks-title').style.color = PRIMARY_COLOR;
-      document.getElementById('winner-announcement').style.borderColor = PRIMARY_COLOR;
-      document.getElementById('winner-announcement').style.background = PRIMARY_COLOR + '22';
-      document.getElementById('winner-announcement').querySelector('.name').style.color = PRIMARY_COLOR;
+      // Actualizar botones de opciones si existen
+      document.querySelectorAll('.option-btn').forEach(btn => {
+        btn.style.color = appearance.textColor;
+        btn.style.background = appearance.bgColor === '#ffffff' ? '#f5f5f5' : '#222';
+      });
+      document.querySelectorAll('.option-sub').forEach(el => el.style.color = appearance.subtitleColor);
     }
+
+    socket.on('update-waiting', ({ title, subtitle }) => {
+      if (title !== undefined) document.getElementById('waiting-title').textContent = title || '🎵 Crowdpick';
+      if (subtitle !== undefined) document.getElementById('waiting-subtitle').textContent = subtitle || 'Esperando la próxima votación...';
+    });
 
     function showWaiting() {
       document.getElementById('poll-section').style.display = 'none';
@@ -116,13 +163,7 @@
       document.getElementById('waiting').style.display = 'block';
     }
 
-    // Actualizar pantalla de espera desde admin en tiempo real
-    socket.on('update-waiting', ({ title, subtitle }) => {
-      if (title !== undefined) document.getElementById('waiting-title').textContent = title || '🎵 Crowdpick';
-      if (subtitle !== undefined) document.getElementById('waiting-subtitle').textContent = subtitle || 'Esperando la próxima votación...';
-    });
-
-    socket.on('poll-update', ({ poll, votes }) => {
+    socket.on('poll-update', ({ poll }) => {
       currentPoll = poll;
       pollId = poll.id || poll.title;
       const key = 'voted_' + pollId;
@@ -139,21 +180,23 @@
       voted = false;
       document.getElementById('waiting').style.display = 'none';
       document.getElementById('thanks').style.display = 'none';
-      document.getElementById('poll-section').style.display = 'block';
+      document.getElementById('poll-section').style.display = 'flex';
       document.getElementById('poll-title').textContent = poll.title;
-      document.getElementById('poll-title').style.color = PRIMARY_COLOR;
+      document.getElementById('poll-title').style.color = appearance.accentColor;
+      document.getElementById('poll-subtitle').style.color = appearance.subtitleColor;
 
       const container = document.getElementById('options-container');
       container.innerHTML = '';
       poll.options.forEach(opt => {
         const btn = document.createElement('button');
         btn.className = 'option-btn';
+        btn.style.color = appearance.textColor;
         btn.innerHTML = `
           <div class="option-title">${opt.name}</div>
-          ${opt.description ? `<div class="option-sub">${opt.description}</div>` : ''}
+          ${opt.description ? `<div class="option-sub" style="color:${appearance.subtitleColor}">${opt.description}</div>` : ''}
         `;
-        btn.onmouseover = () => { btn.style.borderColor = PRIMARY_COLOR; btn.style.background = '#1a1a1a'; };
-        btn.onmouseout = () => { btn.style.borderColor = '#333'; btn.style.background = '#222'; };
+        btn.onmouseover = () => { btn.style.borderColor = appearance.accentColor; };
+        btn.onmouseout = () => { btn.style.borderColor = '#333'; };
         btn.onclick = () => castVote(opt.id);
         container.appendChild(btn);
       });
@@ -170,7 +213,6 @@
       document.getElementById('winner-announcement').style.display = 'block';
     });
 
-    // Reinicio forzado: limpia localStorage y vuelve a waiting sin importar el estado anterior
     socket.on('go-home', () => {
       voted = false;
       if (pollId) localStorage.removeItem('voted_' + pollId);
