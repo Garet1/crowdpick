@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Media a la Carta — Votá</title>
+  <title>Crowdpick — Votá</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -17,7 +17,7 @@
       justify-content: center;
       padding: 20px;
     }
-    h1 { font-size: 1.4rem; margin-bottom: 8px; text-align: center; color: #1DB954; }
+    h1 { font-size: 1.4rem; margin-bottom: 8px; text-align: center; }
     p.subtitle { font-size: 0.9rem; color: #aaa; margin-bottom: 30px; text-align: center; }
     .options { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; }
     .option-btn {
@@ -31,26 +31,24 @@
       text-align: left;
       transition: all 0.2s;
     }
-    .option-btn:hover { border-color: #1DB954; background: #1a1a1a; }
-    .option-label { font-size: 0.75rem; color: #1DB954; margin-bottom: 4px; }
+    .option-label { font-size: 0.75rem; margin-bottom: 4px; }
     .option-title { font-weight: 600; }
     .option-sub { font-size: 0.8rem; color: #aaa; margin-top: 2px; }
     #thanks { display: none; text-align: center; }
-    #thanks h2 { font-size: 1.6rem; color: #1DB954; margin-bottom: 10px; }
+    #thanks h2 { font-size: 1.6rem; margin-bottom: 10px; }
     #thanks p { color: #aaa; margin-top: 8px; }
     #winner-announcement {
       display: none;
       margin-top: 30px;
-      background: #1a3a25;
-      border: 2px solid #1DB954;
       border-radius: 16px;
       padding: 24px 20px;
       text-align: center;
       width: 100%;
       max-width: 400px;
+      border: 2px solid;
     }
     #winner-announcement .label { font-size: 0.85rem; color: #aaa; margin-bottom: 8px; }
-    #winner-announcement .name { font-size: 2rem; font-weight: 700; color: #1DB954; }
+    #winner-announcement .name { font-size: 2rem; font-weight: 700; }
     #winner-announcement .trophy { font-size: 2.5rem; margin-bottom: 10px; }
     #waiting { text-align: center; }
     #waiting h2 { font-size: 1.4rem; color: #aaa; }
@@ -59,7 +57,7 @@
 </head>
 <body>
   <div id="waiting">
-    <h2>🎵 Media a la Carta</h2>
+    <h2 id="waiting-title">🎵 Crowdpick</h2>
     <p>Esperando la próxima votación...</p>
   </div>
 
@@ -70,7 +68,7 @@
   </div>
 
   <div id="thanks">
-    <h2>✅ ¡Voto registrado!</h2>
+    <h2 id="thanks-title">✅ ¡Voto registrado!</h2>
     <p>Mirá la pantalla grande para ver los resultados en vivo</p>
   </div>
 
@@ -86,6 +84,24 @@
     let pollId = null;
     let voted = false;
     let currentPoll = null;
+    let PRIMARY_COLOR = '#6C63FF';
+    let VENUE_NAME = 'Crowdpick';
+
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(cfg => {
+        PRIMARY_COLOR = cfg.primaryColor;
+        VENUE_NAME = cfg.venueName;
+        applyTheme();
+      });
+
+    function applyTheme() {
+      document.getElementById('waiting-title').style.color = PRIMARY_COLOR;
+      document.getElementById('thanks-title').style.color = PRIMARY_COLOR;
+      document.getElementById('winner-announcement').style.borderColor = PRIMARY_COLOR;
+      document.getElementById('winner-announcement').style.background = PRIMARY_COLOR + '22';
+      document.getElementById('winner-announcement').querySelector('.name').style.color = PRIMARY_COLOR;
+    }
 
     socket.on('poll-update', ({ poll, votes }) => {
       currentPoll = poll;
@@ -106,6 +122,7 @@
       document.getElementById('thanks').style.display = 'none';
       document.getElementById('poll-section').style.display = 'block';
       document.getElementById('poll-title').textContent = poll.title;
+      document.getElementById('poll-title').style.color = PRIMARY_COLOR;
 
       const container = document.getElementById('options-container');
       container.innerHTML = '';
@@ -113,10 +130,13 @@
         const btn = document.createElement('button');
         btn.className = 'option-btn';
         btn.innerHTML = `
-          <div class="option-label">${opt.type || ''}</div>
+          <div class="option-label" style="color:${PRIMARY_COLOR}">${opt.type || ''}</div>
           <div class="option-title">${opt.name}</div>
           <div class="option-sub">${opt.description || ''}</div>
         `;
+        btn.style.setProperty('--accent', PRIMARY_COLOR);
+        btn.onmouseover = () => { btn.style.borderColor = PRIMARY_COLOR; btn.style.background = '#1a1a1a'; };
+        btn.onmouseout = () => { btn.style.borderColor = '#333'; btn.style.background = '#222'; };
         btn.onclick = () => castVote(opt.id);
         container.appendChild(btn);
       });
@@ -145,8 +165,7 @@
     function castVote(optionId) {
       if (voted) return;
       voted = true;
-      const key = 'voted_' + pollId;
-      localStorage.setItem(key, '1');
+      localStorage.setItem('voted_' + pollId, '1');
       socket.emit('vote', optionId);
       document.getElementById('poll-section').style.display = 'none';
       document.getElementById('thanks').style.display = 'block';

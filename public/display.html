@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Media a la Carta — Display</title>
+  <title>Crowdpick — Display</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -17,58 +17,33 @@
       padding: 40px;
     }
     #waiting { text-align: center; }
-    #waiting h1 { font-size: 3rem; color: #1DB954; }
+    #waiting h1 { font-size: 3rem; }
     #waiting p { font-size: 1.2rem; color: #555; margin-top: 16px; }
     #poll-section { display: none; width: 100%; max-width: 1000px; }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 40px;
-    }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
     .poll-title { font-size: 2.2rem; font-weight: 700; color: #fff; }
     .qr-box { text-align: center; }
     .qr-box img { border-radius: 12px; width: 140px; height: 140px; }
     .qr-label { font-size: 0.85rem; color: #aaa; margin-top: 8px; }
-    .qr-url { font-size: 1rem; color: #1DB954; font-weight: 600; }
+    .qr-url { font-size: 1rem; font-weight: 600; }
     .options { display: flex; flex-direction: column; gap: 20px; }
-    .option-row {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      transition: opacity 0.5s;
-    }
+    .option-row { display: flex; align-items: center; gap: 16px; transition: opacity 0.5s; }
     .option-row.loser { opacity: 0.3; }
-    .option-row.winner .option-name { color: #1DB954; }
-    .option-row.winner .bar-fill { background: #1DB954; }
     .option-info { width: 260px; flex-shrink: 0; }
-    .option-type { font-size: 0.75rem; color: #1DB954; text-transform: uppercase; letter-spacing: 1px; }
+    .option-type { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
     .option-name { font-size: 1.3rem; font-weight: 700; transition: color 0.5s; }
     .option-desc { font-size: 0.85rem; color: #aaa; }
     .bar-container { flex: 1; background: #222; border-radius: 8px; height: 48px; overflow: hidden; }
-    .bar-fill {
-      height: 100%;
-      background: #1DB954;
-      border-radius: 8px;
-      transition: width 0.5s ease, background 0.5s;
-      min-width: 4px;
-    }
-    .option-row.loser .bar-fill { background: #444; }
-    .vote-count { width: 80px; text-align: right; font-size: 1.4rem; font-weight: 700; color: #1DB954; }
+    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.5s ease; min-width: 4px; background: #555; }
+    .vote-count { width: 80px; text-align: right; font-size: 1.4rem; font-weight: 700; }
     .percent { width: 60px; text-align: right; font-size: 1rem; color: #aaa; }
-    .winner-badge {
-      font-size: 1.5rem;
-      width: 40px;
-      text-align: center;
-      opacity: 0;
-      transition: opacity 0.5s;
-    }
+    .winner-badge { font-size: 1.5rem; width: 40px; text-align: center; opacity: 0; transition: opacity 0.5s; }
     .option-row.winner .winner-badge { opacity: 1; }
   </style>
 </head>
 <body>
   <div id="waiting">
-    <h1>🎵 Media a la Carta</h1>
+    <h1 id="waiting-title">🎵 Crowdpick</h1>
     <p>La votación comenzará en breve...</p>
   </div>
 
@@ -90,24 +65,34 @@
     let currentOptions = [];
     let LOCAL_IP = null;
     let pendingPoll = null;
+    let PRIMARY_COLOR = '#6C63FF';
+    let VENUE_NAME = 'Crowdpick';
 
-    // Primero obtenemos la IP, después arrancamos todo
-    fetch('/api/ip')
-      .then(r => r.json())
-      .then(data => {
-        LOCAL_IP = data.ip;
-        // Si ya llegó un poll-update antes de tener la IP, lo procesamos ahora
-        if (pendingPoll) {
-          const { poll, votes } = pendingPoll;
-          pendingPoll = null;
-          showPoll(poll, votes);
-        }
-      });
+    Promise.all([
+      fetch('/api/ip').then(r => r.json()),
+      fetch('/api/config').then(r => r.json())
+    ]).then(([ipData, cfg]) => {
+      LOCAL_IP = ipData.ip;
+      PRIMARY_COLOR = cfg.primaryColor;
+      VENUE_NAME = cfg.venueName;
+      applyTheme();
+      if (pendingPoll) {
+        const { poll, votes } = pendingPoll;
+        pendingPoll = null;
+        showPoll(poll, votes);
+      }
+    });
+
+    function applyTheme() {
+      document.getElementById('waiting-title').style.color = PRIMARY_COLOR;
+      document.querySelector('.qr-url') && (document.querySelector('.qr-url').style.color = PRIMARY_COLOR);
+    }
 
     function generateQR(url) {
       const encoded = encodeURIComponent(url);
       document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encoded}`;
       document.getElementById('qr-url').textContent = url;
+      document.getElementById('qr-url').style.color = PRIMARY_COLOR;
     }
 
     function showPoll(poll, votes) {
@@ -115,32 +100,34 @@
       document.getElementById('waiting').style.display = 'none';
       document.getElementById('poll-section').style.display = 'block';
       document.getElementById('poll-title').textContent = poll.title;
-      generateQR(`http://${LOCAL_IP}:3000`);
+      generateQR(`https://${window.location.host}`);
       renderOptions(poll.options, votes);
     }
 
     socket.on('poll-update', ({ poll, votes }) => {
-      if (!LOCAL_IP) {
-        // IP aún no llegó, guardamos para después
-        pendingPoll = { poll, votes };
-        return;
-      }
+      if (!LOCAL_IP) { pendingPoll = { poll, votes }; return; }
       showPoll(poll, votes);
     });
 
-    socket.on('votes-update', (votes) => {
-      updateBars(votes);
-    });
+    socket.on('votes-update', (votes) => { updateBars(votes); });
 
     socket.on('show-winner', ({ winnerId }) => {
       currentOptions.forEach(opt => {
         const row = document.getElementById(`row-${opt.id}`);
         if (!row) return;
         row.classList.remove('winner', 'loser');
+        row.classList.add(opt.id === winnerId ? 'winner' : 'loser');
+        const bar = document.getElementById(`bar-${opt.id}`);
+        const name = row.querySelector('.option-name');
+        const type = row.querySelector('.option-type');
+        const count = document.getElementById(`count-${opt.id}`);
         if (opt.id === winnerId) {
-          row.classList.add('winner');
+          if (bar) bar.style.background = PRIMARY_COLOR;
+          if (name) name.style.color = PRIMARY_COLOR;
+          if (type) type.style.color = PRIMARY_COLOR;
+          if (count) count.style.color = PRIMARY_COLOR;
         } else {
-          row.classList.add('loser');
+          if (bar) bar.style.background = '#444';
         }
       });
     });
@@ -160,14 +147,14 @@
         row.id = `row-${opt.id}`;
         row.innerHTML = `
           <div class="option-info">
-            <div class="option-type">${opt.type || ''}</div>
+            <div class="option-type" style="color:${PRIMARY_COLOR}">${opt.type || ''}</div>
             <div class="option-name">${opt.name}</div>
             <div class="option-desc">${opt.description || ''}</div>
           </div>
           <div class="bar-container">
-            <div class="bar-fill" id="bar-${opt.id}" style="width:0%"></div>
+            <div class="bar-fill" id="bar-${opt.id}" style="width:0%;background:${PRIMARY_COLOR}"></div>
           </div>
-          <div class="vote-count" id="count-${opt.id}">0</div>
+          <div class="vote-count" id="count-${opt.id}" style="color:${PRIMARY_COLOR}">0</div>
           <div class="percent" id="pct-${opt.id}">0%</div>
           <div class="winner-badge" id="badge-${opt.id}">🏆</div>
         `;
